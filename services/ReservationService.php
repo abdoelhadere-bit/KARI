@@ -18,6 +18,10 @@ class ReservationService
     {
         Session::start();
 
+        $startDt = new \DateTime($start);
+
+        $today = new \DateTime('today');
+
         $userId = (int) Session::get('user_id', 0);
         if ($userId <= 0) {
             throw new PermissionDeniedException("Vous devez être connecté.");
@@ -27,7 +31,8 @@ class ReservationService
             throw new NotFoundException("Logement introuvable.");
         }
 
-        if ($start === '' || $end === '' || $end <= $start) {
+        // verifier date
+        if ($start === '' || $end === '' || $end <= $start || $startDt < $today) {
             throw new DateConflictException("Dates invalides.");
         }
 
@@ -39,6 +44,9 @@ class ReservationService
         if (!$rental) {
             throw new NotFoundException("Logement introuvable.");
         }
+        
+
+
 
         // Verifier guests
         $maxGuests = (int) $rental['max_guests'];
