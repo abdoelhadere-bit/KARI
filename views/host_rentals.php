@@ -17,12 +17,6 @@ $role    = (string) Session::get('role', '');
 $err = '';
 $ok  = '';
 
-/**
- * Actions:
- * - GET  ?action=create
- * - GET  ?action=edit&id=xx
- * - POST action=create / update / delete
- */
 $action = $_GET['action'] ?? '';
 
 try {
@@ -39,7 +33,7 @@ try {
             'is_active'       => isset($_POST['is_active']) ? 1 : 0,
         ]);
         $ok = "Logement ajouté ✅";
-        $action = ''; // retour liste
+        $action = ''; 
     }
 
     // UPDATE

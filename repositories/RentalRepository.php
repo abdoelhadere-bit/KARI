@@ -4,185 +4,128 @@ declare(strict_types=1);
 namespace repositories;
 
 use PDO;
+use entities\Rental;
 
-class RentalRepository
+final class RentalRepository
 {
-    private PDO $pdo;
+    public function __construct(private PDO $pdo) {}
 
-    public function __construct(PDO $pdo)
+    private function map(array $r): Rental
     {
-        $this->pdo = $pdo;
+        $img = $r['image'] ?? ($r['cover_path'] ?? null);
+
+        return new Rental(
+            (int)$r['id'],
+            (int)$r['host_id'],
+            (string)$r['title'],
+            (string)$r['city'],
+            (float)$r['price_per_night'],
+            (int)$r['max_guests'],
+            $r['address'] ?? null,
+            $r['description'] ?? null,
+            $img !== '' ? $img : null,
+            (string)($r['status'] ?? 'active'),
+            $r['host_name'] ?? null
+        );
     }
 
-    public function findById(int $id): ?array
+    public function findById(int $id): ?Rental
     {
-        $stmt = $this->pdo->prepare("SELECT r.*, u.name AS host_name, u.email AS host_email
-                                     FROM rentals r
-                                     JOIN users u ON u.id = r.host_id
-                                     WHERE r.id = ?
-                                     LIMIT 1");
-        $stmt->execute([$id]);
-        $rental = $stmt->fetch(PDO::FETCH_ASSOC);
+        $sql = "SELECT r.*, u.name AS host_name
+                FROM rentals r
+                JOIN users u ON u.id = r.host_id
+                WHERE r.id = :id
+                LIMIT 1";
+        $st = $this->pdo->prepare($sql);
+        $st->execute([':id' => $id]);
+        $row = $st->fetch(PDO::FETCH_ASSOC);
 
-        return $rental ?: null;
+        return $row ? $this->map($row) : null;
     }
 
-    public function listActive(int $page = 1, int $perPage = 6): array
+    public function listActive(int $page, int $perPage): array
     {
         $page = max(1, $page);
+        $perPage = max(1, $perPage);
         $offset = ($page - 1) * $perPage;
 
-        // total
-        $total = (int)$this->pdo->query("SELECT COUNT(*) FROM rentals WHERE status='active'")->fetchColumn();
+        $total = (int)$this->pdo
+            ->query("SELECT COUNT(*) FROM rentals WHERE status='active'")
+            ->fetchColumn();
 
-        // items
-        $stmt = $this->pdo->prepare("SELECT r.*, u.name AS host_name
-                                      FROM rentals r
-                                      JOIN users u ON u.id = r.host_id
-                                      WHERE r.status='active'
-                                      ORDER BY r.created_at DESC
-                                      LIMIT ? OFFSET ?");
-        $stmt->bindValue(1, (int)$perPage, PDO::PARAM_INT);
-        $stmt->bindValue(2, (INT)$offset, PDO::PARAM_INT);
-        $stmt->execute();
+        $pages = max(1, (int)ceil($total / $perPage));
 
-        return [
-            'items' => $stmt->fetchAll(PDO::FETCH_ASSOC),
-            'total' => $total,
-            'page'  => $page,
-            'perPage' => $perPage,
-            'pages' => (int)ceil($total / $perPage),
-        ];
+        $sql = "SELECT r.*, u.name AS host_name
+                FROM rentals r
+                JOIN users u ON u.id = r.host_id
+                WHERE r.status='active'
+                ORDER BY r.id DESC
+                LIMIT :limit OFFSET :offset";
+        $st = $this->pdo->prepare($sql);
+        $st->bindValue(':limit', $perPage, PDO::PARAM_INT);
+        $st->bindValue(':offset', $offset, PDO::PARAM_INT);
+        $st->execute();
+
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        $items = array_map(fn($row) => $this->map($row), $rows);
+
+        return ['items' => $items, 'total' => $total, 'page' => $page, 'pages' => $pages];
     }
 
-    public function search(array $filters, int $page = 1, int $perPage = 6): array
+    public function search(array $filters, int $page, int $perPage): array
     {
         $page = max(1, $page);
+        $perPage = max(1, $perPage);
         $offset = ($page - 1) * $perPage;
-    
+
         $where = ["r.status='active'"];
         $params = [];
-    
-        // ville
+
         if (!empty($filters['city'])) {
-            $where[] = "r.city LIKE ?";
-            $params[] = '%' . $filters['city'] . '%';
+            $where[] = "r.city LIKE :city";
+            $params[':city'] = '%' . $filters['city'] . '%';
         }
-    
-        // prix min/max
-        if (!empty($filters['min_price'])) {
-            $where[] = "r.price_per_night >= ?";
-            $params[] = (float)$filters['min_price'];
+        if ($filters['min_price'] !== '' && is_numeric($filters['min_price'])) {
+            $where[] = "r.price_per_night >= :minp";
+            $params[':minp'] = (float)$filters['min_price'];
         }
-    
-        if (!empty($filters['max_price'])) {
-            $where[] = "r.price_per_night <= ?";
-            $params[] = (float)$filters['max_price'];
+        if ($filters['max_price'] !== '' && is_numeric($filters['max_price'])) {
+            $where[] = "r.price_per_night <= :maxp";
+            $params[':maxp'] = (float)$filters['max_price'];
         }
-    
-        // guests
-        if (!empty($filters['guests'])) {
-            $where[] = "r.max_guests >= ?";
-            $params[] = (int)$filters['guests'];
+        if ($filters['guests'] !== '' && is_numeric($filters['guests'])) {
+            $where[] = "r.max_guests >= :guests";
+            $params[':guests'] = (int)$filters['guests'];
         }
-    
-        // dates
-        $hasDates = !empty($filters['start_date']) && !empty($filters['end_date']);
-        if ($hasDates) {
-            $start = $filters['start_date'];
-            $end   = $filters['end_date'];
-        
-            // Exclure logements avec réservation booked qui chevauche
-            $where[] = "NOT EXISTS (SELECT 1 FROM reservations res
-                        WHERE res.rental_id = r.id
-                        AND res.status = 'booked'
-                        AND NOT (res.end_date <= ? OR res.start_date >= ?))";
-            $params[] = $start;
-            $params[] = $end;
-        }
-    
-        $whereSql = implode(" AND ", $where);
-    
+
+        $whereSql = implode(' AND ', $where);
+
         // total
-        $stmtTotal = $this->pdo->prepare("SELECT COUNT(*) FROM rentals r WHERE $whereSql");
-        $stmtTotal->execute($params);
-        $total = (int)$stmtTotal->fetchColumn();
-    
+        $stTotal = $this->pdo->prepare("SELECT COUNT(*) FROM rentals r WHERE $whereSql");
+        $stTotal->execute($params);
+        $total = (int)$stTotal->fetchColumn();
+
+        $pages = max(1, (int)ceil($total / $perPage));
+
         // items
         $sql = "SELECT r.*, u.name AS host_name
                 FROM rentals r
                 JOIN users u ON u.id = r.host_id
                 WHERE $whereSql
-                ORDER BY r.created_at DESC
-                LIMIT ? OFFSET ?";
+                ORDER BY r.id DESC
+                LIMIT :limit OFFSET :offset";
+        $st = $this->pdo->prepare($sql);
 
-        $stmt = $this->pdo->prepare($sql);
-
-        foreach ($params as $i => $val) {
-            $stmt->bindValue($i + 1, $val);
+        foreach ($params as $k => $v) {
+            $st->bindValue($k, $v);
         }
+        $st->bindValue(':limit', $perPage, PDO::PARAM_INT);
+        $st->bindValue(':offset', $offset, PDO::PARAM_INT);
 
-        $stmt->bindValue(count($params) + 1, $perPage, PDO::PARAM_INT);
-        $stmt->bindValue(count($params) + 2, $offset, PDO::PARAM_INT);
+        $st->execute();
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        $items = array_map(fn($row) => $this->map($row), $rows);
 
-        $stmt->execute();
-
-        return [
-            'items' => $stmt->fetchAll(PDO::FETCH_ASSOC),
-            'total' => $total,
-            'page'  => $page,
-            'perPage' => $perPage,
-            'pages' => (int)ceil($total / $perPage),
-        ];
-
+        return ['items' => $items, 'total' => $total, 'page' => $page, 'pages' => $pages];
     }
-
-    public function listByHost(int $hostId): array
-    {
-        $stmt = $this->pdo->prepare("SELECT * FROM rentals
-                                     WHERE host_id = ?
-                                     ORDER BY created_at DESC");
-        $stmt->execute([$hostId]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    public function create(int $hostId, array $data): int
-    {
-        $stmt = $this->pdo->prepare("INSERT INTO rentals (host_id, title, description, city, address, image, price_per_night, max_guests, status)
-                                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')");
-
-        $stmt->execute([$hostId, $data['title'], $data['description'], $data['city'], $data['address'], $data['image'], $data['price_per_night'],$data['max_guests']]);
-
-        return (int)$this->pdo->lastInsertId();
-    }
-
-    public function update(int $rentalId, array $data): void
-    {
-        $hasImage = isset($data['image']) && $data['image'] !== '';
-    
-        $sql = "UPDATE rentals
-                SET title = ?, description = ?, city = ?, address = ?, price_per_night = ?, max_guests = ?";
-    
-        $params = [$data['title'], $data['description'], $data['city'], $data['address'], $data['price_per_night'], $data['max_guests']];
-    
-        if ($hasImage) {
-            $sql .= ", image = ?";
-            $params[] = $data['image'];
-        }
-    
-        $sql .= " WHERE id = ?";
-        $params[] = $rentalId;
-    
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute($params);
-    }
-
-
-    public function delete(int $rentalId): void
-    {
-        $stmt = $this->pdo->prepare("DELETE FROM rentals WHERE id = ?");
-        $stmt->execute([$rentalId]);
-    }
-
-
 }

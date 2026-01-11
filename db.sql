@@ -13,6 +13,8 @@ CREATE TABLE users (
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+DESCRIBE users
+
 -- RENTALS 
 CREATE TABLE rentals (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -72,8 +74,9 @@ CREATE TABLE reservations (
 
   CONSTRAINT chk_reservation_dates CHECK (end_date > start_date)
 );
+use kari
 
-DESCRIBE users
+DESCRIBE reviews
 
 
 -- FAVORITES

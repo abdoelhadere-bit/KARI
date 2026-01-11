@@ -5,30 +5,34 @@ namespace services;
 
 use core\Database;
 use repositories\RentalRepository;
+use entities\Rental;
+use exceptions\NotFoundException;
 
-class RentalService
+final class RentalService
 {
     private RentalRepository $repo;
 
     public function __construct()
     {
-        $pdo = Database::getConnection();
-        $this->repo = new RentalRepository($pdo);
+        $this->repo = new RentalRepository(Database::getConnection());
     }
 
-    public function listActive(int $page = 1, int $perPage = 6): array
+    public function listActive(int $page, int $perPage): array
     {
         return $this->repo->listActive($page, $perPage);
     }
 
-    public function getDetails(int $rentalId): ?array
-    {
-        return $this->repo->findById($rentalId);
-    }
-
-    public function search(array $filters, int $page = 1, int $perPage = 6): array
+    public function search(array $filters, int $page, int $perPage): array
     {
         return $this->repo->search($filters, $page, $perPage);
     }
 
+    public function getDetails(int $id): Rental
+    {
+        $r = $this->repo->findById($id);
+        if (!$r) {
+            throw new NotFoundException("Logement introuvable.");
+        }
+        return $r;
+    }
 }

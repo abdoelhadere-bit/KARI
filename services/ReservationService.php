@@ -6,6 +6,7 @@ namespace services;
 use core\Database;
 use repositories\ReservationRepository;
 use repositories\RentalRepository;
+use entities\Reservation;
 use exceptions\DateConflictException;
 use exceptions\NotFoundException;
 use exceptions\PermissionDeniedException;
@@ -13,14 +14,9 @@ use utils\Session;
 
 class ReservationService
 {
-    // Réserver un logement
     public function book(int $rentalId, string $start, string $end, int $guests): int
     {
         Session::start();
-
-        $startDt = new \DateTime($start);
-
-        $today = new \DateTime('today');
 
         $userId = (int) Session::get('user_id', 0);
         if ($userId <= 0) {
@@ -31,37 +27,37 @@ class ReservationService
             throw new NotFoundException("Logement introuvable.");
         }
 
-        // verifier date
-        if ($start === '' || $end === '' || $end <= $start || $startDt < $today) {
+        if ($start === '' || $end === '') {
+            throw new DateConflictException("Dates invalides.");
+        }
+
+        $startDt = new \DateTime($start);
+        $endDt   = new \DateTime($end);
+        $today   = new \DateTime('today');
+
+        if ($endDt <= $startDt || $startDt < $today) {
             throw new DateConflictException("Dates invalides.");
         }
 
         $pdo = Database::getConnection();
 
-        // Verifier que le logement existe
         $rentalRepo = new RentalRepository($pdo);
         $rental = $rentalRepo->findById($rentalId);
         if (!$rental) {
             throw new NotFoundException("Logement introuvable.");
         }
-        
 
-
-
-        // Verifier guests
         $maxGuests = (int) $rental['max_guests'];
         if ($guests <= 0 || $guests > $maxGuests) {
             throw new DateConflictException("Nombre de guests invalide.");
         }
 
-        // Verifier conflit dates
         $repo = new ReservationRepository($pdo);
         if ($repo->hasConflict($rentalId, $start, $end)) {
             throw new DateConflictException("Ce logement est déjà réservé sur ces dates.");
         }
 
-        // Calcul total = nuits * prix
-        $nights = (new \DateTime($start))->diff(new \DateTime($end))->days;
+        $nights = $startDt->diff($endDt)->days;
         if ($nights <= 0) {
             throw new DateConflictException("La durée doit être au moins 1 nuit.");
         }
@@ -69,16 +65,31 @@ class ReservationService
         $price = (float) $rental['price_per_night'];
         $total = $nights * $price;
 
-        $reservationId = $repo->create($rentalId, $userId, $start, $end, $guests, $total);
-        
-        $sendMail = new EmailService;
-        $sendMail->send((string)$rental['host_email'],
-            "Nouvelle réservation",
-            "Votre logement '{$rental['title']}' a été réservé du $start au $end.");
+        $reservation = new Reservation(
+            null,
+            $rentalId,
+            $userId,
+            $start,
+            $end,
+            $guests,
+            $total,
+            'booked'
+        );
+
+        $reservationId = $repo->create($reservation);
+
+     
+        if (!empty($rental['host_email'])) {
+            (new EmailService())->send(
+                (string)$rental['host_email'],
+                "Nouvelle réservation",
+                "Votre logement '{$rental['title']}' a été réservé du $start au $end."
+            );
+        }
+
         return $reservationId;
     }
 
-    // Annuler une réservation 
     public function cancel(int $reservationId): void
     {
         Session::start();
@@ -98,29 +109,27 @@ class ReservationService
             throw new NotFoundException("Réservation introuvable.");
         }
 
-        // admin peut annuler tout
-        if ($role !== 'admin') {
-            // traveler seulement ses réservations
-            if ((int)$reservation['traveler_id'] !== $userId) {
-                throw new PermissionDeniedException("Vous ne pouvez annuler que vos réservations.");
-            }
+        if ($role !== 'admin' && !$reservation->isOwner($userId)) {
+            throw new PermissionDeniedException("Vous ne pouvez annuler que vos réservations.");
         }
 
-        if ($reservation['status'] !== 'booked') {
+        if (!$reservation->isBooked()) {
             throw new DateConflictException("Cette réservation ne peut plus être annulée.");
         }
+
         $info = $repo->hostEmailByReservation($reservationId);
 
         $repo->cancel($reservationId);
 
-
-    if ($info) {
-        (new EmailService())->send((string)$info['host_email'],
-            "Réservation annulée",
-            "Une réservation pour '{$info['title']}' a été annulée.");
+        if ($info) {
+            (new EmailService())->send(
+                (string)$info['host_email'],
+                "Réservation annulée",
+                "Une réservation pour '{$info['title']}' a été annulée."
+            );
         }
     }
-    // Mes réservations
+
     public function myReservations(): array
     {
         Session::start();
@@ -131,9 +140,7 @@ class ReservationService
         }
 
         $pdo = Database::getConnection();
-        $repo = new ReservationRepository($pdo);
-
-        return $repo->listByTraveler($userId);
+        return (new ReservationRepository($pdo))->listByTraveler($userId);
     }
 
     public function receipt(int $reservationId): array
@@ -155,7 +162,7 @@ class ReservationService
             throw new NotFoundException("Réservation introuvable.");
         }
 
-        if ($role !== 'admin' && (int)$reservation['traveler_id'] !== $userId) {
+        if ($role !== 'admin' && !$reservation->isOwner($userId)) {
             throw new PermissionDeniedException("Accès refusé.");
         }
 
@@ -166,5 +173,4 @@ class ReservationService
 
         return $data;
     }
-
 }

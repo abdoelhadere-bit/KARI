@@ -3,78 +3,68 @@ declare(strict_types=1);
 
 namespace entities;
 
-use PDO;
-use utils\Session;
-
-class User
+final class User
 {
-    private PDO $pdo;
+    private ?int $id = null;
 
+    private string $name = '';
     private string $email = '';
-    private string $password = '';
+    private string $passwordHash = '';
 
-    public function __construct(PDO $pdo)
+    private string $role = 'traveler';   
+    private string $status = 'active';  
+    private ?string $createdAt = null;
+
+    public static function fromArray(array $row): self
     {
-        $this->pdo = $pdo;
+        $u = new self();
+
+        $u->id = isset($row['id']) ? (int)$row['id'] : null;
+        $u->name = (string)($row['name'] ?? '');
+        $u->email = (string)($row['email'] ?? '');
+
+        $u->passwordHash = (string)($row['password_hash'] ?? '');
+
+        $u->role = (string)($row['role'] ?? 'traveler');
+        $u->status = (string)($row['status'] ?? 'active');
+        $u->createdAt = isset($row['created_at']) ? (string)$row['created_at'] : null;
+
+        return $u;
     }
 
-    // Pour préparer le login()
-    public function setCredentials(string $email, string $password): void
+    public function setId(int $id): void { $this->id = $id; }
+
+    public function setName(string $name): void { $this->name = trim($name); }
+    public function setEmail(string $email): void { $this->email = trim($email); }
+
+    public function setRole(string $role): void { $this->role = $role; }
+    public function setStatus(string $status): void { $this->status = $status; }
+
+    public function setPasswordPlain(string $plainPassword): void
     {
-        $this->email = trim($email);
-        $this->password = $password;
+        $this->passwordHash = password_hash($plainPassword, PASSWORD_DEFAULT);
     }
 
-    public function create(string $name, string $email, string $hashPassword, string $role = 'traveler'): int
-    {
-        $sql = "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, ?)";
-        $stmt = $this->pdo->prepare($sql);
-        $stmt->execute([$name, $email, $hashPassword, $role]);
+    public function getId(): ?int { return $this->id; }
+    public function getName(): string { return $this->name; }
+    public function getEmail(): string { return $this->email; }
+    public function getPasswordHash(): string { return $this->passwordHash; }
+    public function getRole(): string { return $this->role; }
+    public function getStatus(): string { return $this->status; }
+    public function getCreatedAt(): ?string { return $this->createdAt; }
 
-        return (int)$this->pdo->lastInsertId();
+    public function toInsertArray(): array
+    {
+        return [
+            'name' => $this->name,
+            'email' => $this->email,
+            'password_hash' => $this->passwordHash,
+            'role' => $this->role,
+        ];
     }
 
-    public function getById(int $id): ?array
+    public function verifyPassword(string $plain): bool
     {
-        $stmt = $this->pdo->prepare("SELECT id, name, email, role, status, created_at FROM users WHERE id = ?");
-        $stmt->execute([$id]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        return $user ?: null;
-    }
-
-    public function findByEmail(string $email): ?array
-    {
-        $stmt = $this->pdo->prepare("SELECT * FROM users WHERE email = ? LIMIT 1");
-        $stmt->execute([trim($email)]);
-        $user = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        return $user ?: null;
-    }
-
-    public function login(): bool
-    {
-        Session::start();
-
-        $user = $this->findByEmail($this->email);
-
-        if (!$user) {
-            return false;
-        }
-
-        if ($user['status'] !== 'active') {
-            return false;
-        }
-
-        if (!password_verify($this->password, $user['password_hash'])) {
-            return false;
-        }
-
-        Session::set('user_id', (int)$user['id']);
-        Session::set('role', $user['role']);
-        Session::set('user_name', $user['name']);
-        Session::set('user_email', $user['email']);
-
-        return true;
+        return password_verify($plain, $this->passwordHash);
     }
 }

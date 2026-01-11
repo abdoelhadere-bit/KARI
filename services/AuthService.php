@@ -4,7 +4,7 @@ declare(strict_types=1);
 namespace services;
 
 use core\Database;
-use entities\User;
+use repositories\UserRepository;
 use utils\Session;
 
 class AuthService
@@ -18,20 +18,20 @@ class AuthService
             return ['ok' => false, 'error' => "Tous les champs sont obligatoires."];
         }
 
-        $Roles = ['traveler', 'host', 'admin'];
-        if (!in_array($role, $Roles, true)) {
+        $roles = ['traveler', 'host', 'admin'];
+        if (!in_array($role, $roles, true)) {
             return ['ok' => false, 'error' => "Rôle invalide."];
         }
 
         $pdo = Database::getConnection();
-        $userModel = new User($pdo);
+        $repo = new UserRepository($pdo);
 
-        if ($userModel->findByEmail($email)) {
+        if ($repo->emailExists($email)) {
             return ['ok' => false, 'error' => "Email déjà utilisé."];
         }
 
         $hash = password_hash($password, PASSWORD_DEFAULT);
-        $userId = $userModel->create($name, $email, $hash, $role);
+        $userId = $repo->create($name, $email, $hash, $role);
 
         return ['ok' => true, 'user_id' => $userId];
     }
@@ -39,10 +39,34 @@ class AuthService
     public function login(string $email, string $password): bool
     {
         $pdo = Database::getConnection();
-        $userModel = new User($pdo);
+        $repo = new UserRepository($pdo);
 
-        $userModel->setCredentials($email, $password);
-        return $userModel->login();
+        $email = trim($email);
+        $password = (string)$password;
+
+        $user = $repo->findByEmail($email);
+        if (!$user) {
+            return false;
+        }
+
+        if ($user['status'] !== 'active') {
+            return false;
+        }
+
+  
+        $hash = (string)($user['password_hash'] ?? $user['password'] ?? '');
+
+        if ($hash === '' || !password_verify($password, $hash)) {
+            return false;
+        }
+
+        Session::start();
+        Session::set('user_id', (int)$user['id']);
+        Session::set('role', (string)$user['role']);
+        Session::set('user_name', (string)$user['name']);
+        Session::set('user_email', (string)$user['email']);
+
+        return true;
     }
 
     public function logout(): void

@@ -10,9 +10,9 @@ Guard::requireRole('admin');
 
 $service = new AdminService();
 
-// ✅ On récupère des données (lecture uniquement) pour alimenter le dashboard
-$stats = $service->stats();                 // ['users'=>..,'rentals'=>..,'booked_reservations'=>..,'revenue'=>..,'top_rentals'=>..]
-$recent = $service->reservations(8);        // dernières réservations
+
+$stats = $service->stats();                 
+$recent = $service->reservations(8);        
 
 $users   = (int)($stats['users'] ?? 0);
 $rentals = (int)($stats['rentals'] ?? 0);
@@ -171,7 +171,8 @@ $topRentals = $stats['top_rentals'] ?? [];
 
       <hr style="border:0;border-top:1px solid rgba(255,255,255,.10);margin:14px 0;">
 
-      <div>
+      <div>        if ($role !== 'admin' && !$reservation->isOwner($userId)) {
+
         <div class="sub" style="margin-bottom:10px;">Raccourcis</div>
         <div style="display:grid; gap:10px;">
           <a class="btn" href="index.php?page=admin_panel">⚙ Admin panel</a>
@@ -186,7 +187,6 @@ $topRentals = $stats['top_rentals'] ?? [];
 </main>
 
 <style>
-  /* responsive: stats 4 -> 2 -> 1 */
   @media (max-width: 980px){
     .grid3[style*="repeat(4"]{ grid-template-columns: repeat(2, 1fr) !important; }
     .layout{ grid-template-columns: 1fr !important; }

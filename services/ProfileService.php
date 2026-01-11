@@ -18,12 +18,10 @@ class ProfileService
 
     private function getPDO(): PDO
     {
-        // ✅ Option 1 (souvent): core\Database::getConnection()
         if (class_exists('\core\Database') && method_exists('\core\Database', 'getConnection')) {
             return \core\Database::getConnection();
         }
 
-        // ✅ Option 2 (souvent): config\Database::getInstance()->getConnection()
         if (class_exists('\config\Database') && method_exists('\config\Database', 'getInstance')) {
             return \config\Database::getInstance()->getConnection();
         }

@@ -1,29 +1,45 @@
 <?php
 declare(strict_types=1);
 
+use utils\Guard;
+use utils\Session;
 use services\FavoriteService;
 
-$error = '';
+Guard::requireLogin();     
+Session::start();          
 
 try {
+    
     if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-        header("Location: index.php");
-        exit;
+        throw new RuntimeException("Méthode invalide.");
     }
 
     $rentalId = (int)($_POST['rental_id'] ?? 0);
-    $redirect = (string)($_POST['redirect'] ?? 'index.php');
+    if ($rentalId <= 0) {
+        throw new RuntimeException("Rental ID invalide.");
+    }
+
+    
+    $redirect = (string)($_POST['redirect'] ?? '');
+    if ($redirect === '') {
+        $redirect = 'index.php?page=rental&id=' . $rentalId;
+    }
 
     (new FavoriteService())->toggle($rentalId);
+
+    Session::set('flash_ok', "Favoris mis à jour ✅");
 
     header("Location: " . $redirect);
     exit;
 
-} catch (\Throwable $e) {
-    $error = $e->getMessage();
-}
-?>
+} catch (Throwable $e) {
+    Session::set('flash_err', $e->getMessage());
 
-<h2>Favoris</h2>
-<p style="color:red;"><?= htmlspecialchars($error) ?></p>
-<p><a href="index.php">Retour</a></p>
+    $fallbackId = (int)($_POST['rental_id'] ?? 0);
+    $fallback = $fallbackId > 0
+        ? 'index.php?page=rental&id=' . $fallbackId
+        : 'index.php?page=home';
+
+    header("Location: " . $fallback);
+    exit;
+}

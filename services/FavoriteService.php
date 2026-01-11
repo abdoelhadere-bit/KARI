@@ -7,8 +7,9 @@ use core\Database;
 use repositories\FavoriteRepository;
 use exceptions\PermissionDeniedException;
 use utils\Session;
+use entities\FavoriteRental;
 
-class FavoriteService
+final class FavoriteService
 {
     private FavoriteRepository $repo;
 
@@ -34,15 +35,17 @@ class FavoriteService
         return $this->repo->exists($userId, $rentalId);
     }
 
-    public function toggle(int $rentalId): void
+    public function toggle(int $rentalId): bool
     {
         $userId = $this->requireLogin();
 
         if ($this->repo->exists($userId, $rentalId)) {
             $this->repo->remove($userId, $rentalId);
-        } else {
-            $this->repo->add($userId, $rentalId);
+            return false;
         }
+
+        $this->repo->add($userId, $rentalId);
+        return true;
     }
 
     public function myFavorites(): array

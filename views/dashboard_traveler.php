@@ -5,8 +5,47 @@ use utils\Guard;
 use utils\Session;
 use services\RentalService;
 
+Session::start();
 Guard::requireRole('traveler');
+
 require __DIR__ . '/partials/header.php';
+
+function studly(string $s): string
+{
+    $s = str_replace(['-', '_'], ' ', $s);
+    $s = ucwords($s);
+    return str_replace(' ', '', $s);
+}
+
+function getVal($r, string $key): string
+{
+    if (is_array($r)) {
+        return (string)($r[$key] ?? '');
+    }
+
+    if (is_object($r)) {
+        $m = 'get' . studly($key);
+        if (method_exists($r, $m)) {
+            return (string)$r->$m();
+        }
+
+        if (method_exists($r, 'toArray')) {
+            $arr = $r->toArray();
+            return (string)($arr[$key] ?? '');
+        }
+
+        if (isset($r->$key)) {
+            return (string)$r->$key;
+        }
+    }
+
+    return '';
+}
+
+function getInt($r, string $key): int
+{
+    return (int)getVal($r, $key);
+}
 
 $rentalsPage = (new RentalService())->listActive(1, 6);
 $items = $rentalsPage['items'] ?? [];
@@ -32,19 +71,25 @@ $items = $rentalsPage['items'] ?? [];
 
   <div class="grid3" style="margin-top:12px;">
     <?php foreach ($items as $r): ?>
+      <?php
+        $image = getVal($r, 'image');
+        $title = getVal($r, 'title');
+        $city  = getVal($r, 'city');
+        $price = getVal($r, 'price_per_night');
+        $id    = getInt($r, 'id');
+      ?>
       <div class="card">
-        <?php if (!empty($r['image'])): ?>
-          <img src="<?= htmlspecialchars($r['image']) ?>" alt="">
+        <?php if ($image !== ''): ?>
+          <img src="<?= htmlspecialchars($image) ?>" alt="">
         <?php endif; ?>
-        <h3><?= htmlspecialchars($r['title']) ?></h3>
-        <p>📍 <?= htmlspecialchars($r['city']) ?></p>
-        <p>💰 <?= htmlspecialchars((string)$r['price_per_night']) ?> / nuit</p>
-
+        <h3><?= htmlspecialchars($title) ?></h3>
+        <p>📍 <?= htmlspecialchars($city) ?></p>
+        <p>💰 <?= htmlspecialchars($price) ?> / nuit</p>
+          
         <div style="margin-top:10px;">
-          <a class="btn" href="index.php?page=rental&id=<?= (int)$r['id'] ?>">Détails</a>
+          <a class="btn" href="index.php?page=rental&id=<?= $id ?>">Détails</a>
         </div>
       </div>
     <?php endforeach; ?>
   </div>
 </section>
-

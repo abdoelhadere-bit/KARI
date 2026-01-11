@@ -115,21 +115,22 @@ function q(array $filters, int $p): string {
         <div class="grid3">
           <?php foreach ($items as $r): ?>
             <div class="card">
-              <?php if (!empty($r['image'])): ?>
-                <img src="<?= htmlspecialchars($r['image']) ?>" alt="<?= htmlspecialchars($r['title']) ?>">
+              <?php if ($r->getImage()): ?>
+                <img src="<?= htmlspecialchars($r->getImage()) ?>" alt="">
               <?php endif; ?>
-
+              
               <div class="card-content">
-                
+              
                 <div class="card-info">
-                  <p>📍 <?= htmlspecialchars($r['city']) ?></p>
-                  <p class="price">💰 <?= htmlspecialchars((string)$r['price_per_night']) ?> / nuit</p>
+                  <p>📍 <?= htmlspecialchars($r->getCity()) ?></p>
+                  <p class="price">💰 <?= htmlspecialchars((string)$r->getPricePerNight()) ?> / nuit</p>
                 </div>
-
-                <a class="btn" href="index.php?page=rental&id=<?= (int)$r['id'] ?>">Voir détail</a>
+              
+                <a class="btn" href="index.php?page=rental&id=<?= $r->getId() ?>">Voir détail</a>
               </div>
             </div>
           <?php endforeach; ?>
+
         </div>
       <?php endif; ?>
 
