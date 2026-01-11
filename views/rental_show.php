@@ -20,7 +20,7 @@ if ($id <= 0) {
 
 $service = new RentalService();
 $rental = $service->getDetails($id);
-
+ 
 if (!$rental) {
     echo "<p>Logement introuvable.</p>";
     echo '<p><a href="index.php">Retour</a></p>';
@@ -42,61 +42,114 @@ $avg = $reviewService->avgByRental((int)$rental['id']);
 $reviews = $reviewService->listByRental((int)$rental['id']);
 ?>
 
-<h2>Détail du logement</h2>
+<!-- HEADER -->
+<div class="glass" style="padding:16px; margin-bottom:14px;">
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+    <div>
+      <h2 class="h1" style="margin:0;"><?= htmlspecialchars($rental['title']) ?></h2>
+      <p class="sub" style="margin-top:6px;">
+        📍 <?= htmlspecialchars($rental['city']) ?>
+        <?php if (!empty($rental['address'])): ?>
+          • <?= htmlspecialchars((string)$rental['address']) ?>
+        <?php endif; ?>
+      </p>
 
-<h3><?= htmlspecialchars($rental['title']) ?></h3>
-<p><b>Ville:</b> <?= htmlspecialchars($rental['city']) ?></p>
-<p><b>Adresse:</b> <?= htmlspecialchars((string)($rental['address'] ?? '')) ?></p>
-<p><b>Prix:</b> <?= htmlspecialchars((string)$rental['price_per_night']) ?> / nuit</p>
-<p><b>Max guests:</b> <?= (int)$rental['max_guests'] ?></p>
-<p><b>Hôte:</b> <?= htmlspecialchars($rental['host_name']) ?></p>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+        <span class="pill">💰 <?= htmlspecialchars((string)$rental['price_per_night']) ?> / nuit</span>
+        <span class="pill">👥 Max: <?= (int)$rental['max_guests'] ?></span>
+        <span class="pill">⭐ <?= number_format((float)$avg, 1) ?> / 5</span>
+        <span class="pill">👤 Hôte: <?= htmlspecialchars($rental['host_name']) ?></span>
+      </div>
+    </div>
 
-<p><b>Description:</b><br><?= nl2br(htmlspecialchars((string)($rental['description'] ?? ''))) ?></p>
+    <div style="display:flex; gap:10px; align-items:center;">
+      <a class="btn" href="index.php?page=home">← Retour</a>
 
-<!-- Bouton Favoris -->
-<?php if (Session::has('user_id')): ?>
-    <form method="POST" action="index.php?page=favorite_toggle" style="margin-top: 15px;">
-        <input type="hidden" name="rental_id" value="<?= (int)$rental['id'] ?>">
-        <input type="hidden" name="redirect" value="index.php?page=rental&id=<?= (int)$rental['id'] ?>">
-        <button type="submit">
-            <?= $isFav ? 'Retirer des favoris' : 'Ajouter aux favoris' ?>
-        </button>
-    </form>
-<?php else: ?>
-    <p><i>Connecte-toi pour ajouter ce logement aux favoris.</i></p>
-<?php endif; ?>
+      <?php if (Session::has('user_id')): ?>
+        <form method="POST" action="index.php?page=favorite_toggle" style="margin:0;">
+          <input type="hidden" name="rental_id" value="<?= (int)$rental['id'] ?>">
+          <input type="hidden" name="redirect" value="index.php?page=rental&id=<?= (int)$rental['id'] ?>">
+          <button class="btn <?= $isFav ? 'btn-danger' : 'btn-primary' ?>" type="submit">
+            <?= $isFav ? '♥ Retirer' : '♡ Favori' ?>
+          </button>
+        </form>
+      <?php endif; ?>
+    </div>
+  </div>
+</div>
 
-<?php if (Session::has('user_id')): ?>
-  <p style="margin-top:10px;">
-    <a href="index.php?page=book&rental_id=<?= (int)$rental['id'] ?>">Réserver ce logement</a>
-  </p>
-<?php endif; ?>
+<!-- CONTENT GRID -->
+<div style="display:grid; gap:14px; grid-template-columns: 1.35fr .65fr; align-items:start;">
+  <!-- LEFT -->
+  <section class="glass" style="padding:14px;">
+    <?php if (!empty($rental['image'])): ?>
+      <div class="card" style="padding:0; overflow:hidden; margin-bottom:12px;">
+        <img src="<?= htmlspecialchars((string)$rental['image']) ?>" alt="Photo logement" style="width:100%; height:320px; object-fit:cover; display:block;">
+      </div>
+    <?php endif; ?>
 
+    <h3 style="margin:6px 0 8px;">Description</h3>
+    <div class="sub" style="line-height:1.7;">
+      <?= nl2br(htmlspecialchars((string)($rental['description'] ?? ''))) ?>
+    </div>
 
-<p style="margin-top: 15px;"><a href="index.php">← Retour à la liste</a></p>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top:14px;">
+      <?php if (Session::has('user_id')): ?>
+        <a class="btn btn-primary" href="index.php?page=book&rental_id=<?= (int)$rental['id'] ?>">
+          Réserver ce logement
+        </a>
+      <?php else: ?>
+        <div class="glass" style="padding:10px 12px;">
+          <span class="sub">Connecte-toi pour réserver / ajouter en favoris.</span>
+          <a class="btn btn-primary" style="margin-left:10px;" href="index.php?page=login">Se connecter</a>
+        </div>
+      <?php endif; ?>
 
-<hr>
-<h3>Avis & Note moyenne</h3>
+      <a class="btn" href="index.php?page=review_create&rental_id=<?= (int)$rental['id'] ?>">
+        Laisser un avis
+      </a>
+    </div>
+  </section>
 
-<p><b>Note moyenne :</b> <?= number_format($avg, 1) ?> / 5</p>
+  <!-- RIGHT -->
+  <aside class="glass" style="padding:14px;">
+    <h3 style="margin:0 0 8px;">Avis & Note</h3>
 
-<p>
-  <a href="index.php?page=review_create&rental_id=<?= (int)$rental['id'] ?>">
-    Laisser un avis
-  </a>
-</p>
+    <div class="card" style="margin-bottom:10px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+        <div>
+          <div class="sub">Note moyenne</div>
+          <div style="font-size:28px; font-weight:800; line-height:1; margin-top:4px;">
+            <?= number_format((float)$avg, 1) ?>
+            <span class="sub" style="font-size:14px; font-weight:600;">/ 5</span>
+          </div>
+        </div>
+        <div class="pill">📝 <?= count($reviews) ?> avis</div>
+      </div>
+    </div>
 
-<?php if (empty($reviews)): ?>
-  <p>Aucun avis.</p>
-<?php else: ?>
-  <ul>
-    <?php foreach ($reviews as $rv): ?>
-      <li>
-        <b><?= htmlspecialchars($rv['user_name']) ?></b> :
-        <?= (int)$rv['rating'] ?>/5
-        <br>
-        <?= nl2br(htmlspecialchars((string)$rv['comment'])) ?>
-      </li>
-    <?php endforeach; ?>
-  </ul>
-<?php endif; ?>
+    <?php if (empty($reviews)): ?>
+      <div class="glass" style="padding:12px;">
+        <p class="sub" style="margin:0;">Aucun avis pour le moment.</p>
+      </div>
+    <?php else: ?>
+      <div style="display:grid; gap:10px; max-height:420px; overflow:auto; padding-right:4px;">
+        <?php foreach ($reviews as $rv): ?>
+          <div class="card">
+            <div style="display:flex; justify-content:space-between; gap:10px; align-items:center;">
+              <b><?= htmlspecialchars($rv['user_name']) ?></b>
+              <span class="pill">⭐ <?= (int)$rv['rating'] ?>/5</span>
+            </div>
+            <?php if (!empty($rv['comment'])): ?>
+              <div class="sub" style="margin-top:8px; line-height:1.6;">
+                <?= nl2br(htmlspecialchars((string)$rv['comment'])) ?>
+              </div>
+            <?php endif; ?>
+          </div>
+        <?php endforeach; ?>
+      </div>
+    <?php endif; ?>
+  </aside>
+</div>
+
+<?php echo '</main>'; ?>

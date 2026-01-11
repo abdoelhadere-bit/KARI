@@ -45,7 +45,7 @@ class ReviewService
         }
 
         if (!$this->repo->canReview($rentalId, $userId)) {
-            throw new PermissionDeniedException("Vous pouvez laisser un avis فقط بعد انتهاء séjour.");
+            throw new PermissionDeniedException("Vous pouvez laisser un avis avant de commencer le séjour.");
         }
 
         return $this->repo->create($rentalId, $userId, $rating, $comment);

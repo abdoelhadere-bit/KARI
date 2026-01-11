@@ -1,9 +1,7 @@
 show DATABASES
 
 DROP DATABASE IF EXISTS kari;
-CREATE DATABASE kari CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE kari;
-
+CREATE DATABASE kari 
 -- USERS
 CREATE TABLE users (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -49,6 +47,10 @@ CREATE TABLE availability (
 );
 
 -- RESERVATIONS
+select * from reservations
+
+TRUNCATE reservations
+
 CREATE TABLE reservations (
   id INT AUTO_INCREMENT PRIMARY KEY,
   rental_id INT NOT NULL,
@@ -71,7 +73,8 @@ CREATE TABLE reservations (
   CONSTRAINT chk_reservation_dates CHECK (end_date > start_date)
 );
 
-DESCRIBE favorites
+DESCRIBE users
+
 
 -- FAVORITES
 CREATE TABLE favorites (
@@ -90,6 +93,8 @@ CREATE TABLE favorites (
 
   CONSTRAINT uq_favorite UNIQUE (user_id, rental_id)
 );
+
+use kari
 
 -- REVIEWS
 CREATE TABLE reviews (
@@ -125,3 +130,8 @@ use kari
 select * from users
 
 delete from users where id=1
+
+
+
+
+
